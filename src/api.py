@@ -4,29 +4,54 @@ from pydantic import BaseModel
 import string
 import joblib
 import os
+import requests
 
-DEFAULT_MODEL_PATH = os.getenv("MODEL_PATH", "models/naive_bayes.joblib")
-model = joblib.load(DEFAULT_MODEL_PATH)
+# === Model loading with fallback download ===
+
+MODEL_PATH = os.getenv("MODEL_PATH", "models/naive_bayes.joblib")
+MODEL_URL = os.getenv("MODEL_URL")
+
+def download_model_if_needed():
+    if not os.path.exists(MODEL_PATH):
+        print(f"🔄 Model not found at {MODEL_PATH}, downloading...")
+        os.makedirs(os.path.dirname(MODEL_PATH), exist_ok=True)
+        response = requests.get(MODEL_URL)
+        if response.status_code == 200:
+            with open(MODEL_PATH, 'wb') as f:
+                f.write(response.content)
+            print("✅ Model downloaded successfully.")
+        else:
+            raise RuntimeError(f"❌ Failed to download model: {response.status_code}")
+
+download_model_if_needed()
+model = joblib.load(MODEL_PATH)
+
+# === FastAPI App Setup ===
 
 app = FastAPI(title="AI vs Human Text Classifier")
 
-# Allow Outlook and local dev origins
 origins = [
     "https://outlook.office.com",
     "https://outlook.office365.com",
-    "http://localhost:8000"  # For your local testing (optional)
+    "http://localhost:8000",   # Local testing
+    "http://localhost:3000",   # If testing add-in locally via web
+    "https://jasulcaf.github.io/AI-Human-Writting-Detection/"  # Optional: add this when using GitHub Pages
 ]
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,           # Domains allowed to access API
+    allow_origins=origins,
     allow_credentials=True,
-    allow_methods=["*"],             # Allow all HTTP methods
-    allow_headers=["*"],             # Allow all headers
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
+
+# === Input Schema ===
 
 class EmailInput(BaseModel):
     text: str
+
+# === Prediction Logic ===
 
 def get_confidence_score(text):
     proba = model.predict_proba([text])[0][1]
@@ -39,30 +64,27 @@ def get_label(score):
         return "Likely Human"
     else:
         return "Some AI assistance used"
-    
+
+# === Text Cleaning Functions ===
+
 def remove_tags(text):
     tags = ['\n', '\'']
     for tag in tags:
-        # Replace with an empty string instead of the tag
         text = text.replace(tag, '')
     return text
 
-# Remove punctuation
 def remove_punc(text):
-    # Filter out all punctuation chars
-    new_text = ''.join([char for char in text if char not in string.punctuation])
-    return new_text
+    return ''.join([char for char in text if char not in string.punctuation])
 
-# Lowercase
 def lowercase(text):
-    new_text = text.lower()
-    return new_text
+    return text.lower()
 
 def clean_text(text):
-    clean_input = remove_tags(text)
-    clean_input = remove_punc(clean_input)
-    clean_input = lowercase(clean_input)
-    return clean_input
+    text = remove_tags(text)
+    text = remove_punc(text)
+    return lowercase(text)
+
+# === API Endpoint ===
 
 @app.post("/predict")
 def predict(input: EmailInput):
