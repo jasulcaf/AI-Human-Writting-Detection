@@ -6,11 +6,10 @@ import joblib
 import os
 import requests
 
-# === Google Drive download helper ===
+# === Google Drive Large File Download Helpers ===
 
 def download_file_from_google_drive(file_id, destination):
     URL = "https://docs.google.com/uc?export=download"
-
     session = requests.Session()
 
     response = session.get(URL, params={'id': file_id}, stream=True)
@@ -28,10 +27,12 @@ def get_confirm_token(response):
             return value
     return None
 
-def save_response_content(response, destination, chunk_size=32768):
+def save_response_content(response, destination):
+    CHUNK_SIZE = 32768
+
     with open(destination, "wb") as f:
-        for chunk in response.iter_content(chunk_size):
-            if chunk:  # filter out keep-alive chunks
+        for chunk in response.iter_content(CHUNK_SIZE):
+            if chunk:  # filter out keep-alive new chunks
                 f.write(chunk)
 
 # === Model loading with fallback download ===
@@ -43,26 +44,13 @@ def download_model_if_needed():
     if not os.path.exists(MODEL_PATH):
         print(f"🔄 Model not found at {MODEL_PATH}, downloading...")
         os.makedirs(os.path.dirname(MODEL_PATH), exist_ok=True)
-
-        if MODEL_URL and "drive.google.com" in MODEL_URL:
-            import re
-            file_id_match = re.search(r'id=([a-zA-Z0-9_-]+)', MODEL_URL)
-            if not file_id_match:
-                raise RuntimeError("Could not extract Google Drive file ID from MODEL_URL")
-            file_id = file_id_match.group(1)
-
-            download_file_from_google_drive(file_id, MODEL_PATH)
-            print("✅ Model downloaded successfully from Google Drive.")
+        # Extract Google Drive file ID from the URL
+        if "id=" in MODEL_URL:
+            file_id = MODEL_URL.split("id=")[-1]
         else:
-            if not MODEL_URL:
-                raise RuntimeError("MODEL_URL is not set.")
-            response = requests.get(MODEL_URL)
-            if response.status_code == 200:
-                with open(MODEL_PATH, 'wb') as f:
-                    f.write(response.content)
-                print("✅ Model downloaded successfully from URL.")
-            else:
-                raise RuntimeError(f"Failed to download model: {response.status_code}")
+            raise RuntimeError("MODEL_URL is missing 'id=' parameter for Google Drive file ID extraction.")
+        download_file_from_google_drive(file_id, MODEL_PATH)
+        print(f"✅ Model downloaded successfully from Google Drive. File size: {os.path.getsize(MODEL_PATH)} bytes")
 
 download_model_if_needed()
 model = joblib.load(MODEL_PATH)
@@ -74,9 +62,9 @@ app = FastAPI(title="AI vs Human Text Classifier")
 origins = [
     "https://outlook.office.com",
     "https://outlook.office365.com",
-    "http://localhost:8000",   # Local testing
-    "http://localhost:3000",   # If testing add-in locally via web
-    "https://jasulcaf.github.io/AI-Human-Writting-Detection/"  # GitHub Pages
+    "http://localhost:8000",
+    "http://localhost:3000",
+    "https://jasulcaf.github.io/AI-Human-Writting-Detection/"
 ]
 
 app.add_middleware(
