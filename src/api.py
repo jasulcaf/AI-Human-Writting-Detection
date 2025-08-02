@@ -21,7 +21,7 @@ def download_model_if_needed():
                 f.write(response.content)
             print("✅ Model downloaded successfully.")
         else:
-            raise RuntimeError(f"❌ Failed to download model: {response.status_code}")
+            raise RuntimeError(f"Failed to download model: {response.status_code}")
 
 download_model_if_needed()
 model = joblib.load(MODEL_PATH)
@@ -35,7 +35,7 @@ origins = [
     "https://outlook.office365.com",
     "http://localhost:8000",   # Local testing
     "http://localhost:3000",   # If testing add-in locally via web
-    "https://jasulcaf.github.io/AI-Human-Writting-Detection/"  # Optional: add this when using GitHub Pages
+    "https://jasulcaf.github.io/AI-Human-Writting-Detection/"  # GitHub Pages
 ]
 
 app.add_middleware(
