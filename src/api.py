@@ -13,17 +13,19 @@ MODEL_URL = os.getenv("MODEL_URL")
 
 def download_model_if_needed():
     if not os.path.exists(MODEL_PATH):
-        print(f"🔄 Model not found at {MODEL_PATH}, downloading from MODEL_URL...")
+        print(f"🔄 Model not found at {MODEL_PATH}, downloading...")
         os.makedirs(os.path.dirname(MODEL_PATH), exist_ok=True)
-        response = requests.get(MODEL_URL, stream=True)
-        if response.status_code == 200:
-            with open(MODEL_PATH, 'wb') as f:
-                for chunk in response.iter_content(chunk_size=8192):
-                    if chunk:
-                        f.write(chunk)
-            print(f"✅ Model downloaded successfully to {MODEL_PATH}")
-        else:
-            raise RuntimeError(f"❌ Failed to download model: HTTP {response.status_code}")
+        try:
+            with requests.get(MODEL_URL, stream=True) as r:
+                r.raise_for_status()
+                with open(MODEL_PATH, 'wb') as f:
+                    for chunk in r.iter_content(chunk_size=8192):
+                        if chunk:
+                            f.write(chunk)
+            file_size_kb = os.path.getsize(MODEL_PATH) // 1024
+            print(f"✅ Model downloaded successfully. File size: {file_size_kb} KB")
+        except Exception as e:
+            raise RuntimeError(f"❌ Failed to download model: {e}")
 
 download_model_if_needed()
 model = joblib.load(MODEL_PATH)
@@ -91,3 +93,7 @@ def predict(input: EmailInput):
     score = get_confidence_score(clean_input)
     label = get_label(score)
     return {"confidence": score, "label": label}
+
+@app.get("/")
+def health_check():
+    return {"status": "ok"}
