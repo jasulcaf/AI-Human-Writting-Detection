@@ -6,6 +6,34 @@ import joblib
 import os
 import requests
 
+# === Google Drive download helper ===
+
+def download_file_from_google_drive(file_id, destination):
+    URL = "https://docs.google.com/uc?export=download"
+
+    session = requests.Session()
+
+    response = session.get(URL, params={'id': file_id}, stream=True)
+    token = get_confirm_token(response)
+
+    if token:
+        params = {'id': file_id, 'confirm': token}
+        response = session.get(URL, params=params, stream=True)
+
+    save_response_content(response, destination)
+
+def get_confirm_token(response):
+    for key, value in response.cookies.items():
+        if key.startswith('download_warning'):
+            return value
+    return None
+
+def save_response_content(response, destination, chunk_size=32768):
+    with open(destination, "wb") as f:
+        for chunk in response.iter_content(chunk_size):
+            if chunk:  # filter out keep-alive chunks
+                f.write(chunk)
+
 # === Model loading with fallback download ===
 
 MODEL_PATH = os.getenv("MODEL_PATH", "models/naive_bayes.joblib")
@@ -15,13 +43,26 @@ def download_model_if_needed():
     if not os.path.exists(MODEL_PATH):
         print(f"🔄 Model not found at {MODEL_PATH}, downloading...")
         os.makedirs(os.path.dirname(MODEL_PATH), exist_ok=True)
-        response = requests.get(MODEL_URL)
-        if response.status_code == 200:
-            with open(MODEL_PATH, 'wb') as f:
-                f.write(response.content)
-            print("✅ Model downloaded successfully.")
+
+        if MODEL_URL and "drive.google.com" in MODEL_URL:
+            import re
+            file_id_match = re.search(r'id=([a-zA-Z0-9_-]+)', MODEL_URL)
+            if not file_id_match:
+                raise RuntimeError("Could not extract Google Drive file ID from MODEL_URL")
+            file_id = file_id_match.group(1)
+
+            download_file_from_google_drive(file_id, MODEL_PATH)
+            print("✅ Model downloaded successfully from Google Drive.")
         else:
-            raise RuntimeError(f"Failed to download model: {response.status_code}")
+            if not MODEL_URL:
+                raise RuntimeError("MODEL_URL is not set.")
+            response = requests.get(MODEL_URL)
+            if response.status_code == 200:
+                with open(MODEL_PATH, 'wb') as f:
+                    f.write(response.content)
+                print("✅ Model downloaded successfully from URL.")
+            else:
+                raise RuntimeError(f"Failed to download model: {response.status_code}")
 
 download_model_if_needed()
 model = joblib.load(MODEL_PATH)
