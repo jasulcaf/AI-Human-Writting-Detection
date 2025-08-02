@@ -6,35 +6,6 @@ import joblib
 import os
 import requests
 
-# === Google Drive Large File Download Helpers ===
-
-def download_file_from_google_drive(file_id, destination):
-    URL = "https://docs.google.com/uc?export=download"
-    session = requests.Session()
-
-    response = session.get(URL, params={'id': file_id}, stream=True)
-    token = get_confirm_token(response)
-
-    if token:
-        params = {'id': file_id, 'confirm': token}
-        response = session.get(URL, params=params, stream=True)
-
-    save_response_content(response, destination)
-
-def get_confirm_token(response):
-    for key, value in response.cookies.items():
-        if key.startswith('download_warning'):
-            return value
-    return None
-
-def save_response_content(response, destination):
-    CHUNK_SIZE = 32768
-
-    with open(destination, "wb") as f:
-        for chunk in response.iter_content(CHUNK_SIZE):
-            if chunk:  # filter out keep-alive new chunks
-                f.write(chunk)
-
 # === Model loading with fallback download ===
 
 MODEL_PATH = os.getenv("MODEL_PATH", "models/naive_bayes.joblib")
@@ -42,15 +13,17 @@ MODEL_URL = os.getenv("MODEL_URL")
 
 def download_model_if_needed():
     if not os.path.exists(MODEL_PATH):
-        print(f"🔄 Model not found at {MODEL_PATH}, downloading...")
+        print(f"🔄 Model not found at {MODEL_PATH}, downloading from MODEL_URL...")
         os.makedirs(os.path.dirname(MODEL_PATH), exist_ok=True)
-        # Extract Google Drive file ID from the URL
-        if "id=" in MODEL_URL:
-            file_id = MODEL_URL.split("id=")[-1]
+        response = requests.get(MODEL_URL, stream=True)
+        if response.status_code == 200:
+            with open(MODEL_PATH, 'wb') as f:
+                for chunk in response.iter_content(chunk_size=8192):
+                    if chunk:
+                        f.write(chunk)
+            print(f"✅ Model downloaded successfully to {MODEL_PATH}")
         else:
-            raise RuntimeError("MODEL_URL is missing 'id=' parameter for Google Drive file ID extraction.")
-        download_file_from_google_drive(file_id, MODEL_PATH)
-        print(f"✅ Model downloaded successfully from Google Drive. File size: {os.path.getsize(MODEL_PATH)} bytes")
+            raise RuntimeError(f"❌ Failed to download model: HTTP {response.status_code}")
 
 download_model_if_needed()
 model = joblib.load(MODEL_PATH)
@@ -97,10 +70,7 @@ def get_label(score):
 # === Text Cleaning Functions ===
 
 def remove_tags(text):
-    tags = ['\n', '\'']
-    for tag in tags:
-        text = text.replace(tag, '')
-    return text
+    return text.replace('\n', '').replace("'", '')
 
 def remove_punc(text):
     return ''.join([char for char in text if char not in string.punctuation])
