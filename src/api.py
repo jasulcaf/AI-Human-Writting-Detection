@@ -13,7 +13,7 @@ MODEL_URL = os.getenv("MODEL_URL")
 
 def download_model_if_needed():
     if not os.path.exists(MODEL_PATH):
-        print(f"🔄 Model not found at {MODEL_PATH}, downloading...")
+        print(f"Model not found at {MODEL_PATH}, downloading...")
         os.makedirs(os.path.dirname(MODEL_PATH), exist_ok=True)
         try:
             with requests.get(MODEL_URL, stream=True) as r:
@@ -23,9 +23,9 @@ def download_model_if_needed():
                         if chunk:
                             f.write(chunk)
             file_size_kb = os.path.getsize(MODEL_PATH) // 1024
-            print(f"✅ Model downloaded successfully. File size: {file_size_kb} KB")
+            print(f"Model downloaded successfully. File size: {file_size_kb} KB")
         except Exception as e:
-            raise RuntimeError(f"❌ Failed to download model: {e}")
+            raise RuntimeError(f"Failed to download model: {e}")
 
 download_model_if_needed()
 model = joblib.load(MODEL_PATH)
@@ -37,8 +37,13 @@ app = FastAPI(title="AI vs Human Text Classifier")
 origins = [
     "https://outlook.office.com",
     "https://outlook.office365.com",
+    # Allow local development and testing from various ports
     "http://localhost:8000",
     "http://localhost:3000",
+    "http://127.0.0.1:3000",
+    "http://127.0.0.1:8000",
+    # Permit usage of local UI served from a simple file or http server (origin will be null when using file://)
+    "null",
     "https://jasulcaf.github.io/AI-Human-Writting-Detection/"
 ]
 

@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AI vs Human Detector - Local UI</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 0;
+      padding: 20px;
+      background-color: #f4f4f4;
+    }
+    h1 {
+      color: #333;
+    }
+    textarea {
+      width: 100%;
+      min-height: 150px;
+      padding: 10px;
+      font-size: 14px;
+      resize: vertical;
+    }
+    button {
+      margin-top: 10px;
+      padding: 10px 20px;
+      font-size: 16px;
+      cursor: pointer;
+    }
+    pre {
+      margin-top: 20px;
+      padding: 10px;
+      background-color: #fff;
+      border: 1px solid #ddd;
+      white-space: pre-wrap;
+    }
+  </style>
+</head>
+<body>
+  <h1>AI vs Human Text Detector</h1>
+  <p>Paste your text below and click "Predict" to see whether it's likely written by AI or a human.</p>
+  <textarea id="inputText" placeholder="Enter text here..."></textarea><br>
+  <button id="predictButton">Predict</button>
+  <pre id="output"></pre>
+  <script>
+    document.getElementById('predictButton').addEventListener('click', function() {
+      const text = document.getElementById('inputText').value;
+      if (!text.trim()) {
+        document.getElementById('output').innerText = 'Please enter some text to analyse.';
+        return;
+      }
+      fetch('http://localhost:8000/predict', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: text })
+      })
+        .then(response => response.json())
+        .then(data => {
+          if (data && typeof data.confidence !== 'undefined' && data.label) {
+            document.getElementById('output').innerText = 'Confidence: ' + data.confidence + '%\nLabel: ' + data.label;
+          } else {
+            document.getElementById('output').innerText = 'Unexpected response from API.';
+          }
+        })
+        .catch(error => {
+          console.error('Error calling API:', error);
+          document.getElementById('output').innerText = 'Error calling the API. Ensure the server is running on localhost:8000.';
+        });
+    });
+  </script>
+</body>
+</html>
